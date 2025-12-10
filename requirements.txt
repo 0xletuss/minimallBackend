@@ -5,5 +5,7 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 mysql-connector-python==8.2.0
 python-dotenv==1.0.0
-pydantic==2.5.3
+
+# Use pydantic version that ships prebuilt binaries (wheels)
+pydantic>=2.7
 pydantic-settings==2.1.0
