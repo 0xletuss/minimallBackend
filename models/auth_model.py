@@ -2,6 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 from passlib.context import CryptContext
 import os
+import hashlib
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -26,13 +27,28 @@ class AuthModel:
             print(f"Database connection error: {e}")
             return None
     
+    def _prepare_password(self, password: str) -> str:
+        """
+        Prepare password for bcrypt by ensuring it's within 72-byte limit.
+        Pre-hashes with SHA-256 if the password exceeds the limit.
+        """
+        password_bytes = password.encode('utf-8')
+        
+        # If password is longer than 72 bytes, pre-hash it
+        if len(password_bytes) > 72:
+            return hashlib.sha256(password_bytes).hexdigest()
+        
+        return password
+    
     def hash_password(self, password: str) -> str:
         """Hash password using bcrypt"""
-        return pwd_context.hash(password)
+        prepared_password = self._prepare_password(password)
+        return pwd_context.hash(prepared_password)
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verify password against hash"""
-        return pwd_context.verify(plain_password, hashed_password)
+        prepared_password = self._prepare_password(plain_password)
+        return pwd_context.verify(prepared_password, hashed_password)
     
     def create_user(
         self, 
