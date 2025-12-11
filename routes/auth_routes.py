@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import os
 from models.auth_model import AuthModel
 
-router = APIRouter()
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 auth_model = AuthModel()
 security = HTTPBearer()
 
@@ -141,7 +141,7 @@ async def signin(request: SignInRequest):
             "user": result['user']
         }
         
-    except HTTPException:
+    except HTTPException:   
         raise
     except Exception as e:
         raise HTTPException(

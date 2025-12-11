@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 from models.product_model import ProductModel
 
-router = APIRouter()
+router = APIRouter(prefix="/api/products", tags=["products"])
 product_model = ProductModel()
 
 # Pydantic models for responses
