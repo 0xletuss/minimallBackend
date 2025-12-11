@@ -288,6 +288,62 @@ async def update_payment_status(
             detail=f"Failed to update payment status: {str(e)}"
         )
 
+@router.get("/calculate-total")
+async def calculate_order_total(
+    delivery_option: str = "standard",
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Calculate order total before checkout
+    
+    Returns breakdown of costs (subtotal, tax, shipping, marketplace fee, total)
+    """
+    try:
+        user_id = current_user['id']
+        
+        # Get cart items
+        from models.cart_model import CartModel
+        cart_model = CartModel()
+        cart_result = cart_model.get_cart(user_id)
+        
+        if not cart_result['success'] or not cart_result['cart']['items']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cart is empty"
+            )
+        
+        # Calculate totals
+        subtotal = cart_result['cart']['total']
+        tax = subtotal * 0.12  # 12%
+        
+        shipping_fees = {
+            'standard': 50.00,
+            'express': 150.00,
+            'same_day': 300.00,
+            'pickup': 0.00
+        }
+        shipping_fee = shipping_fees.get(delivery_option, 50.00)
+        
+        marketplace_fee = subtotal * 0.02  # 2%
+        total = subtotal + tax + shipping_fee + marketplace_fee
+        
+        return {
+            'success': True,
+            'subtotal': round(subtotal, 2),
+            'tax': round(tax, 2),
+            'shipping_fee': round(shipping_fee, 2),
+            'marketplace_fee': round(marketplace_fee, 2),
+            'total': round(total, 2),
+            'item_count': cart_result['cart']['item_count']
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate total: {str(e)}"
+        )
 
 @router.post("/order/{order_id}/cancel")
 async def cancel_order(
