@@ -8,7 +8,7 @@ import sys
 sys.path.append('..')
 from models.checkout_model import CheckoutModel
 from routes.auth_routes import get_current_user
-
+    
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
 checkout_model = CheckoutModel()
