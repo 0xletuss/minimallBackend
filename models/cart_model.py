@@ -187,6 +187,11 @@ class CartModel:
             cursor.execute(query, (cart_id,))
             items = cursor.fetchall()
             
+            # Convert Decimal to float for JSON serialization
+            for item in items:
+                item['price_at_time'] = float(item['price_at_time'])
+                item['current_price'] = float(item['current_price'])
+            
             # Calculate totals
             total = sum(item['price_at_time'] * item['quantity'] for item in items)
             item_count = sum(item['quantity'] for item in items)
