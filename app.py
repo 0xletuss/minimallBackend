@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from routes.auth_routes import router as auth_router
 from routes.product_routes import router as product_router
 from routes.cart_routes import router as cart_router
@@ -16,26 +15,31 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add custom middleware to handle CORS more explicitly
+# CRITICAL: Custom CORS middleware MUST come first, before CORSMiddleware
 @app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    # Handle preflight requests
+async def cors_middleware(request: Request, call_next):
+    # Handle preflight OPTIONS requests immediately
     if request.method == "OPTIONS":
-        response = Response()
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Max-Age"] = "3600"
-        return response
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Origin, User-Agent",
+                "Access-Control-Max-Age": "3600",
+            }
+        )
     
-    # Process normal requests
+    # Process normal requests and add CORS headers to response
     response = await call_next(request)
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent"
+    response.headers["Access-Control-Expose-Headers"] = "*"
+    
     return response
 
-# Standard CORS middleware (as backup)
+# Standard CORS middleware as backup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

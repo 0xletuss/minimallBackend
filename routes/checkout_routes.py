@@ -1,6 +1,6 @@
 # checkout_routes.py - FastAPI Routes for Checkout
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -81,6 +81,15 @@ class UpdateOrderStatusRequest(BaseModel):
 class UpdatePaymentStatusRequest(BaseModel):
     payment_status: str = Field(..., pattern="^(pending|paid|failed|refunded)$")
     transaction_id: Optional[str] = Field(None, max_length=255)
+
+# ============================================
+# Explicit OPTIONS handlers (no auth required)
+# ============================================
+
+@router.options("/{full_path:path}")
+async def options_handler():
+    """Handle all OPTIONS requests without authentication"""
+    return {"message": "OK"}
 
 # ============================================
 # Routes
