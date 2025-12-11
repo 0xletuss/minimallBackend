@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from routes.auth_routes import router as auth_router
 from routes.product_routes import router as product_router
 from routes.cart_routes import router as cart_router
-from routes.checkout_routes import router as checkout_router  # Add this import
+from routes.checkout_routes import router as checkout_router
 from dotenv import load_dotenv 
 import os
 
@@ -27,7 +27,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(product_router, prefix="/api", tags=["Products"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
-app.include_router(checkout_router, prefix="/api/checkout", tags=["Checkout"])  # Add this
+app.include_router(checkout_router)  # Remove the prefix here since it's already defined in checkout_routes.py
 
 @app.get("/")
 async def root():
