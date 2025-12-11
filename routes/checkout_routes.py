@@ -10,7 +10,7 @@ from models.checkout_model import CheckoutModel
 from routes.auth_routes import get_current_user
     
 
-router = APIRouter(prefix="/api/checkout", tags=["checkout"])
+router = APIRouter()
 checkout_model = CheckoutModel()
 
 # ============================================
