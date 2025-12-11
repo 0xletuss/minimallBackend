@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.auth_routes import router as auth_router
-from routes.product_routes import router as product_router  # Add this
-from dotenv import load_dotenv 
+from routes.product_routes import router as product_router
 from routes.cart_routes import router as cart_router
+from routes.checkout_routes import router as checkout_router  # Add this import
+from dotenv import load_dotenv 
 import os
 
 load_dotenv()
@@ -24,8 +25,9 @@ app.add_middleware(
 
 # Register routers
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(product_router, prefix="/api", tags=["Products"])  # Add this
-app.include_router(cart_router, prefix="/api/cart", tags=["cart"])
+app.include_router(product_router, prefix="/api", tags=["Products"])
+app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
+app.include_router(checkout_router, prefix="/api/checkout", tags=["Checkout"])  # Add this
 
 @app.get("/")
 async def root():
