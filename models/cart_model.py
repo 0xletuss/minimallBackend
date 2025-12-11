@@ -74,7 +74,10 @@ class CartModel:
             # Get product price
             if variant_id:
                 cursor.execute(
-                    "SELECT price FROM product_variants WHERE id = %s", 
+                    """SELECT p.price + pv.price_modifier as price 
+                       FROM product_variants pv 
+                       JOIN products p ON pv.product_id = p.id 
+                       WHERE pv.id = %s""", 
                     (variant_id,)
                 )
             else:
@@ -168,14 +171,16 @@ class CartModel:
                     ci.added_at,
                     p.name as product_name,
                     p.slug as product_slug,
-                    p.image_url as product_image,
-                    p.stock as product_stock,
-                    pv.name as variant_name,
-                    pv.stock as variant_stock,
-                    COALESCE(pv.price, p.price) as current_price
+                    p.quantity_in_stock as product_stock,
+                    pv.variant_name,
+                    pv.variant_value,
+                    pv.quantity_in_stock as variant_stock,
+                    COALESCE(p.price + pv.price_modifier, p.price) as current_price,
+                    pi.image_url as product_image
                 FROM cart_items ci
                 JOIN products p ON ci.product_id = p.id
                 LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+                LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
                 WHERE ci.cart_id = %s
                 ORDER BY ci.added_at DESC
             """
