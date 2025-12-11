@@ -15,29 +15,48 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS Configuration - Allow all origins for development
+# In production, replace "*" with specific frontend URLs
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # For production: ["https://yourdomain.com", "http://localhost:3000"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Register routers
-app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(product_router, prefix="/api", tags=["Products"])
-app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
-app.include_router(checkout_router)  # Remove the prefix here since it's already defined in checkout_routes.py
+# Note: checkout_router already has prefix="/api/checkout" in checkout_routes.py
+app.include_router(auth_router)
+app.include_router(product_router)
+app.include_router(cart_router)
+app.include_router(checkout_router)
 
 @app.get("/")
 async def root():
-    return {"message": "Railway E-commerce API", "status": "running"}
+    return {
+        "message": "Railway E-commerce API", 
+        "status": "running",
+        "version": "1.0.0"
+    }
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "database": "connected"  # You can add actual DB health check here
+    }
+
+# Add a test endpoint to verify CORS is working
+@app.get("/api/test-cors")
+async def test_cors():
+    return {
+        "message": "CORS is working!",
+        "timestamp": "2024-12-11"
+    }
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    # Use reload=True for development, False for production
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
