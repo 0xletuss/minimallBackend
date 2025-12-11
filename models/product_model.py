@@ -41,7 +41,10 @@ class ProductModel:
             # Build query with filters
             query = """
                 SELECT p.*, c.name as category_name, c.slug as category_slug,
-                       (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1) as primary_image
+                       COALESCE(
+                           (SELECT image_url FROM product_images WHERE product_id = p.id AND is_primary = 1 LIMIT 1),
+                           (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY display_order LIMIT 1)
+                       ) as primary_image
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 WHERE p.is_active = 1
