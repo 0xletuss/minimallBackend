@@ -4,7 +4,7 @@ from typing import Optional
 from models.cart_model import CartModel
 from routes.auth_routes import get_current_user
 
-router = APIRouter(prefix="/api/cart", tags=["cart"])
+router = APIRouter()
 cart_model = CartModel()
 
 # Pydantic models

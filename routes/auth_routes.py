@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import os
 from models.auth_model import AuthModel
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter()
 auth_model = AuthModel()
 security = HTTPBearer()
 
