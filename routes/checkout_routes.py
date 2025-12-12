@@ -86,10 +86,6 @@ class UpdatePaymentStatusRequest(BaseModel):
 # Explicit OPTIONS handlers (no auth required)
 # ============================================
 
-@router.options("/{full_path:path}")
-async def options_handler():
-    """Handle all OPTIONS requests without authentication"""
-    return {"message": "OK"}
 
 # ============================================
 # Routes

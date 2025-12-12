@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from routes.auth_routes import router as auth_router
 from routes.product_routes import router as product_router
@@ -15,46 +16,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Nuclear CORS handler - handles ALL requests
-@app.middleware("http")
-async def super_cors_middleware(request: Request, call_next):
-    # Immediately handle ALL OPTIONS requests
-    if request.method == "OPTIONS":
-        return JSONResponse(
-            content={"message": "OK"},
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Max-Age": "86400",
-            }
-        )
-    
-    # For all other requests, process and add CORS headers
-    try:
-        response = await call_next(request)
-    except Exception as e:
-        # Even on errors, return with CORS headers
-        return JSONResponse(
-            content={"detail": str(e)},
-            status_code=500,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "*",
-                "Access-Control-Allow-Headers": "*",
-            }
-        )
-    
-    # Add CORS headers to response
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "*"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Expose-Headers"] = "*"
-    
-    return response
+# Add CORS middleware - this MUST come before router registration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,  # Cache preflight requests for 24 hours
+)
 
-# Register routers
+# Register routers AFTER middleware
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(product_router, prefix="/api", tags=["Products"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
@@ -67,6 +40,19 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# Global exception handler to ensure CORS headers even on errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 if __name__ == "__main__":
     import uvicorn
