@@ -364,3 +364,180 @@ async def process_checkout(
             cursor.close()
         if connection and connection.is_connected():
             connection.close()
+
+# ============================================
+# NEW ORDER LISTING AND DETAILS ENDPOINTS
+# ============================================
+
+@router.get("/")
+async def get_user_orders(current_user: dict = Depends(get_current_user)):
+    """Get all orders for the current user"""
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # Get all orders for the user
+        orders_query = """
+            SELECT 
+                id as order_id,
+                order_number,
+                status,
+                payment_status,
+                payment_method,
+                subtotal,
+                tax,
+                shipping_fee,
+                marketplace_fee,
+                discount,
+                total,
+                delivery_option,
+                estimated_delivery_date,
+                created_at,
+                updated_at
+            FROM orders
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+        """
+        cursor.execute(orders_query, (current_user["id"],))
+        orders = cursor.fetchall()
+        
+        # For each order, get the items count
+        for order in orders:
+            cursor.execute(
+                "SELECT COUNT(*) as item_count FROM order_items WHERE order_id = %s",
+                (order['order_id'],)
+            )
+            count_result = cursor.fetchone()
+            order['items'] = []
+            order['item_count'] = count_result['item_count'] if count_result else 0
+        
+        return orders
+        
+    except Exception as e:
+        print(f"Error in get_user_orders: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch orders: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
+
+@router.get("/{order_id}")
+async def get_order_details(
+    order_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get detailed information for a specific order"""
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        
+        # Get order details
+        order_query = """
+            SELECT 
+                o.id as order_id,
+                o.order_number,
+                o.status,
+                o.payment_status,
+                o.payment_method,
+                o.subtotal,
+                o.tax,
+                o.shipping_fee,
+                o.marketplace_fee,
+                o.discount,
+                o.total,
+                o.shipping_full_name,
+                o.shipping_phone,
+                o.shipping_address_line1,
+                o.shipping_address_line2,
+                o.shipping_city,
+                o.shipping_state,
+                o.shipping_postal_code,
+                o.shipping_country,
+                o.delivery_option,
+                o.estimated_delivery_date,
+                o.customer_notes,
+                o.created_at,
+                o.updated_at,
+                u.email as user_email
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.id = %s AND o.user_id = %s
+        """
+        cursor.execute(order_query, (order_id, current_user["id"]))
+        order = cursor.fetchone()
+        
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found"
+            )
+        
+        # Get order items
+        items_query = """
+            SELECT 
+                oi.id as item_id,
+                oi.product_id,
+                oi.variant_id,
+                oi.product_name,
+                oi.variant_name,
+                oi.variant_value,
+                oi.sku,
+                oi.quantity,
+                oi.price,
+                oi.subtotal,
+                pi.image_url
+            FROM order_items oi
+            LEFT JOIN product_images pi ON oi.product_id = pi.product_id AND pi.is_primary = 1
+            WHERE oi.order_id = %s
+        """
+        cursor.execute(items_query, (order_id,))
+        items = cursor.fetchall()
+        
+        # Format shipping address
+        order['shipping_address'] = {
+            'full_name': order['shipping_full_name'],
+            'phone': order['shipping_phone'],
+            'address_line1': order['shipping_address_line1'],
+            'address_line2': order['shipping_address_line2'],
+            'city': order['shipping_city'],
+            'state': order['shipping_state'],
+            'postal_code': order['shipping_postal_code'],
+            'country': order['shipping_country']
+        }
+        
+        # Remove individual address fields
+        for field in ['shipping_full_name', 'shipping_phone', 'shipping_address_line1', 
+                      'shipping_address_line2', 'shipping_city', 'shipping_state', 
+                      'shipping_postal_code', 'shipping_country']:
+            order.pop(field, None)
+        
+        # Add items to order
+        order['items'] = items
+        
+        return order
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_order_details: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch order details: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
