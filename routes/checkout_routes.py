@@ -6,17 +6,36 @@ import random
 import string
 import mysql.connector
 from mysql.connector import Error
+import os
 
-from middleware.auth_middleware import get_current_user
+from routes.auth_routes import get_current_user
 from models.checkout_model import (
     CheckoutRequest, 
     OrderResponse, 
     OrderSummaryResponse, 
     OrderItemResponse
 )
-from database import get_db
 
 router = APIRouter()
+
+# Database configuration
+def get_db_connection():
+    """Get database connection"""
+    try:
+        connection = mysql.connector.connect(
+            host=os.getenv('MYSQL_HOST', 'localhost'),
+            user=os.getenv('MYSQL_USER', 'root'),
+            password=os.getenv('MYSQL_PASSWORD', ''),
+            database=os.getenv('MYSQL_DATABASE', 'railway'),
+            port=int(os.getenv('MYSQL_PORT', 3306))
+        )
+        return connection
+    except Error as e:
+        print(f"Database connection error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection failed"
+        )
 
 def generate_order_number():
     """Generate a unique order number"""
@@ -55,7 +74,7 @@ async def get_order_summary(current_user: dict = Depends(get_current_user)):
     cursor = None
     
     try:
-        connection = get_db()
+        connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
         # Get user's cart
@@ -157,7 +176,7 @@ async def process_checkout(
     cursor = None
     
     try:
-        connection = get_db()
+        connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
         # Get user's cart
