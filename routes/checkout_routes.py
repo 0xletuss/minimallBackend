@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List
 from decimal import Decimal
 from datetime import datetime, timedelta
 import random
 import string
+import mysql.connector
+from mysql.connector import Error
 
-from database import get_db
 from middleware.auth_middleware import get_current_user
 from models.checkout_model import (
     CheckoutRequest, 
@@ -14,6 +14,7 @@ from models.checkout_model import (
     OrderSummaryResponse, 
     OrderItemResponse
 )
+from database import get_db
 
 router = APIRouter()
 
@@ -47,111 +48,132 @@ def calculate_estimated_delivery(delivery_option: str) -> datetime:
     return datetime.now() + timedelta(days=days.get(delivery_option, 5))
 
 @router.get("/summary", response_model=OrderSummaryResponse)
-async def get_order_summary(
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_order_summary(current_user: dict = Depends(get_current_user)):
     """Get order summary from cart before checkout"""
     
-    # Get user's cart
-    cart_query = """
-        SELECT cart_id FROM cart 
-        WHERE user_id = %s
-        LIMIT 1
-    """
-    cart_result = db.execute(cart_query, (current_user["id"],))
-    cart = cart_result.fetchone()
-    
-    if not cart:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cart not found"
-        )
-    
-    # Get cart items with product details
-    items_query = """
-        SELECT 
-            ci.product_id,
-            ci.variant_id,
-            ci.quantity,
-            ci.price_at_time,
-            p.name as product_name,
-            pv.variant_name,
-            pv.variant_value,
-            pi.image_url
-        FROM cart_items ci
-        JOIN products p ON ci.product_id = p.id
-        LEFT JOIN product_variants pv ON ci.variant_id = pv.id
-        LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
-        WHERE ci.cart_id = %s
-    """
-    items_result = db.execute(items_query, (cart[0],))
-    items = items_result.fetchall()
-    
-    if not items:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cart is empty"
-        )
-    
-    # Calculate totals
-    subtotal = sum(Decimal(str(item[3])) * item[2] for item in items)
-    tax = subtotal * Decimal("0.12")  # 12% tax
-    marketplace_fee = subtotal * Decimal("0.02")  # 2% marketplace fee
-    shipping_fee = Decimal("50.00")  # Default standard shipping
-    discount = Decimal("0.00")
-    total = subtotal + tax + marketplace_fee + shipping_fee - discount
-    
-    # Format items
-    order_items = [
-        OrderItemResponse(
-            product_id=item[0],
-            variant_id=item[1],
-            quantity=item[2],
-            price=Decimal(str(item[3])),
-            subtotal=Decimal(str(item[3])) * item[2],
-            product_name=item[4],
-            variant_name=item[5],
-            variant_value=item[6],
-            image_url=item[7]
-        )
-        for item in items
-    ]
-    
-    return OrderSummaryResponse(
-        subtotal=subtotal,
-        tax=tax,
-        shipping_fee=shipping_fee,
-        marketplace_fee=marketplace_fee,
-        discount=discount,
-        total=total,
-        items=order_items,
-        item_count=len(items)
-    )
-
-@router.post("/process", response_model=OrderResponse)
-async def process_checkout(
-    checkout_data: CheckoutRequest,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Process checkout and create order"""
+    connection = None
+    cursor = None
     
     try:
+        connection = get_db()
+        cursor = connection.cursor(dictionary=True)
+        
         # Get user's cart
-        cart_query = """
-            SELECT cart_id FROM cart 
-            WHERE user_id = %s
-            LIMIT 1
-        """
-        cart_result = db.execute(cart_query, (current_user["id"],))
-        cart = cart_result.fetchone()
+        cursor.execute(
+            "SELECT cart_id FROM cart WHERE user_id = %s LIMIT 1",
+            (current_user["id"],)
+        )
+        cart = cursor.fetchone()
         
         if not cart:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Cart not found"
             )
+        
+        # Get cart items with product details
+        items_query = """
+            SELECT 
+                ci.product_id,
+                ci.variant_id,
+                ci.quantity,
+                ci.price_at_time,
+                p.name as product_name,
+                pv.variant_name,
+                pv.variant_value,
+                pi.image_url
+            FROM cart_items ci
+            JOIN products p ON ci.product_id = p.id
+            LEFT JOIN product_variants pv ON ci.variant_id = pv.id
+            LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
+            WHERE ci.cart_id = %s
+        """
+        cursor.execute(items_query, (cart['cart_id'],))
+        items = cursor.fetchall()
+        
+        if not items:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cart is empty"
+            )
+        
+        # Calculate totals
+        subtotal = sum(Decimal(str(item['price_at_time'])) * item['quantity'] for item in items)
+        tax = subtotal * Decimal("0.12")  # 12% tax
+        marketplace_fee = subtotal * Decimal("0.02")  # 2% marketplace fee
+        shipping_fee = Decimal("50.00")  # Default standard shipping
+        discount = Decimal("0.00")
+        total = subtotal + tax + marketplace_fee + shipping_fee - discount
+        
+        # Format items
+        order_items = [
+            OrderItemResponse(
+                product_id=item['product_id'],
+                variant_id=item['variant_id'],
+                quantity=item['quantity'],
+                price=Decimal(str(item['price_at_time'])),
+                subtotal=Decimal(str(item['price_at_time'])) * item['quantity'],
+                product_name=item['product_name'],
+                variant_name=item['variant_name'],
+                variant_value=item['variant_value'],
+                image_url=item['image_url']
+            )
+            for item in items
+        ]
+        
+        return OrderSummaryResponse(
+            subtotal=subtotal,
+            tax=tax,
+            shipping_fee=shipping_fee,
+            marketplace_fee=marketplace_fee,
+            discount=discount,
+            total=total,
+            items=order_items,
+            item_count=len(items)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_order_summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get order summary: {str(e)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
+
+@router.post("/process", response_model=OrderResponse)
+async def process_checkout(
+    checkout_data: CheckoutRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Process checkout and create order"""
+    
+    connection = None
+    cursor = None
+    
+    try:
+        connection = get_db()
+        cursor = connection.cursor(dictionary=True)
+        
+        # Get user's cart
+        cursor.execute(
+            "SELECT cart_id FROM cart WHERE user_id = %s LIMIT 1",
+            (current_user["id"],)
+        )
+        cart = cursor.fetchone()
+        
+        if not cart:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Cart not found"
+            )
+        
+        cart_id = cart['cart_id']
         
         # Get cart items
         items_query = """
@@ -172,8 +194,8 @@ async def process_checkout(
             LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
             WHERE ci.cart_id = %s
         """
-        items_result = db.execute(items_query, (cart[0],))
-        items = items_result.fetchall()
+        cursor.execute(items_query, (cart_id,))
+        items = cursor.fetchall()
         
         if not items:
             raise HTTPException(
@@ -182,7 +204,7 @@ async def process_checkout(
             )
         
         # Calculate order totals
-        subtotal = sum(Decimal(str(item[3])) * item[2] for item in items)
+        subtotal = sum(Decimal(str(item['price_at_time'])) * item['quantity'] for item in items)
         tax = subtotal * Decimal("0.12")
         marketplace_fee = subtotal * Decimal("0.02")
         shipping_fee = calculate_shipping_fee(checkout_data.delivery_option.value, subtotal)
@@ -210,7 +232,7 @@ async def process_checkout(
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
-        db.execute(order_query, (
+        cursor.execute(order_query, (
             current_user["id"],
             order_number,
             checkout_data.payment_method.value,
@@ -234,9 +256,7 @@ async def process_checkout(
         ))
         
         # Get the created order ID
-        order_id_query = "SELECT LAST_INSERT_ID() as order_id"
-        order_id_result = db.execute(order_id_query)
-        order_id = order_id_result.fetchone()[0]
+        order_id = cursor.lastrowid
         
         # Create order items
         for item in items:
@@ -246,17 +266,17 @@ async def process_checkout(
                     variant_name, variant_value, sku, quantity, price, subtotal
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            item_subtotal = Decimal(str(item[3])) * item[2]
-            db.execute(order_item_query, (
+            item_subtotal = Decimal(str(item['price_at_time'])) * item['quantity']
+            cursor.execute(order_item_query, (
                 order_id,
-                item[0],
-                item[1],
-                item[4],
-                item[6],
-                item[7],
-                item[8] or item[5],
-                item[2],
-                float(item[3]),
+                item['product_id'],
+                item['variant_id'],
+                item['product_name'],
+                item['variant_name'],
+                item['variant_value'],
+                item['variant_sku'] or item['sku'],
+                item['quantity'],
+                float(item['price_at_time']),
                 float(item_subtotal)
             ))
         
@@ -265,26 +285,25 @@ async def process_checkout(
             INSERT INTO order_status_history (order_id, status, notes)
             VALUES (%s, 'pending', 'Order created')
         """
-        db.execute(status_history_query, (order_id,))
+        cursor.execute(status_history_query, (order_id,))
         
         # Clear cart items
-        clear_cart_query = "DELETE FROM cart_items WHERE cart_id = %s"
-        db.execute(clear_cart_query, (cart[0],))
+        cursor.execute("DELETE FROM cart_items WHERE cart_id = %s", (cart_id,))
         
-        db.commit()
+        connection.commit()
         
         # Format response
         order_items = [
             OrderItemResponse(
-                product_id=item[0],
-                variant_id=item[1],
-                quantity=item[2],
-                price=Decimal(str(item[3])),
-                subtotal=Decimal(str(item[3])) * item[2],
-                product_name=item[4],
-                variant_name=item[6],
-                variant_value=item[7],
-                image_url=item[9]
+                product_id=item['product_id'],
+                variant_id=item['variant_id'],
+                quantity=item['quantity'],
+                price=Decimal(str(item['price_at_time'])),
+                subtotal=Decimal(str(item['price_at_time'])) * item['quantity'],
+                product_name=item['product_name'],
+                variant_name=item['variant_name'],
+                variant_value=item['variant_value'],
+                image_url=item['image_url']
             )
             for item in items
         ]
@@ -309,9 +328,20 @@ async def process_checkout(
             created_at=datetime.now()
         )
         
+    except HTTPException:
+        if connection:
+            connection.rollback()
+        raise
     except Exception as e:
-        db.rollback()
+        if connection:
+            connection.rollback()
+        print(f"Error in process_checkout: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process checkout: {str(e)}"
         )
+    finally:
+        if cursor:
+            cursor.close()
+        if connection and connection.is_connected():
+            connection.close()
