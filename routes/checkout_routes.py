@@ -365,11 +365,12 @@ async def process_checkout(
         if connection and connection.is_connected():
             connection.close()
 
+
 # ============================================
-# NEW ORDER LISTING AND DETAILS ENDPOINTS
+# ORDER LISTING AND DETAILS ENDPOINTS
 # ============================================
 
-@router.get("/")
+@router.get("/orders")
 async def get_user_orders(current_user: dict = Depends(get_current_user)):
     """Get all orders for the current user"""
     
@@ -377,6 +378,8 @@ async def get_user_orders(current_user: dict = Depends(get_current_user)):
     cursor = None
     
     try:
+        print(f"Fetching orders for user ID: {current_user['id']}")
+        
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
@@ -405,6 +408,8 @@ async def get_user_orders(current_user: dict = Depends(get_current_user)):
         cursor.execute(orders_query, (current_user["id"],))
         orders = cursor.fetchall()
         
+        print(f"Found {len(orders)} orders")
+        
         # For each order, get the items count
         for order in orders:
             cursor.execute(
@@ -429,7 +434,7 @@ async def get_user_orders(current_user: dict = Depends(get_current_user)):
         if connection and connection.is_connected():
             connection.close()
 
-@router.get("/{order_id}")
+@router.get("/orders/{order_id}")
 async def get_order_details(
     order_id: int,
     current_user: dict = Depends(get_current_user)
@@ -440,6 +445,8 @@ async def get_order_details(
     cursor = None
     
     try:
+        print(f"Fetching order details for order ID: {order_id}, user ID: {current_user['id']}")
+        
         connection = get_db_connection()
         cursor = connection.cursor(dictionary=True)
         
@@ -484,6 +491,8 @@ async def get_order_details(
                 detail="Order not found"
             )
         
+        print(f"Order found: {order['order_number']}")
+        
         # Get order items
         items_query = """
             SELECT 
@@ -504,6 +513,8 @@ async def get_order_details(
         """
         cursor.execute(items_query, (order_id,))
         items = cursor.fetchall()
+        
+        print(f"Found {len(items)} items in order")
         
         # Format shipping address
         order['shipping_address'] = {

@@ -33,6 +33,8 @@ app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(product_router, prefix="/api", tags=["Products"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
 app.include_router(checkout_router, prefix="/api/checkout", tags=["Checkout"])
+# Register checkout router again under /api/orders for order history endpoints
+app.include_router(checkout_router, prefix="/api", tags=["Orders"])
 
 
 @app.get("/")
@@ -59,4 +61,4 @@ async def global_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
