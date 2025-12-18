@@ -5,6 +5,7 @@ from routes.auth_routes import router as auth_router
 from routes.product_routes import router as product_router
 from routes.cart_routes import router as cart_router
 from routes.checkout_routes import router as checkout_router
+from routes.profile_routes import router as profile_router  # Add this
 
 from dotenv import load_dotenv 
 import os
@@ -17,25 +18,24 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware - this MUST come before router registration
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=86400,  # Cache preflight requests for 24 hours
+    max_age=86400,
 )
 
-# Register routers AFTER middleware
+# Register routers
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(product_router, prefix="/api", tags=["Products"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
 app.include_router(checkout_router, prefix="/api/checkout", tags=["Checkout"])
-# Register checkout router again under /api/orders for order history endpoints
 app.include_router(checkout_router, prefix="/api", tags=["Orders"])
-
+app.include_router(profile_router, prefix="/api", tags=["Profile"])  # Add this
 
 @app.get("/")
 async def root():
@@ -45,7 +45,6 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-# Global exception handler to ensure CORS headers even on errors
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
