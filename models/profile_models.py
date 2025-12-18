@@ -37,7 +37,7 @@ class ProfileResponse(BaseModel):
     id: int
     email: str
     full_name: Optional[str]
-    phone_number: Optional[str]
+    phone: Optional[str]
     is_seller: bool
     seller_status: Optional[str]
     bio: Optional[str]
@@ -144,7 +144,6 @@ class ProfileDashboardResponse(BaseModel):
 
 
 # ==================== ProfileModel Class ====================
-
 class ProfileModel:
     def __init__(self):
         self.db_config = {
@@ -175,7 +174,7 @@ class ProfileModel:
         try:
             cursor = connection.cursor(dictionary=True)
             cursor.execute("""
-                SELECT id, email, full_name, phone_number, is_seller, 
+                SELECT id, email, full_name, phone, is_seller, 
                        seller_status, bio, profile_image, social_handle, created_at
                 FROM users
                 WHERE id = %s
@@ -235,7 +234,7 @@ class ProfileModel:
             
             # Fetch updated profile
             cursor.execute("""
-                SELECT id, email, full_name, phone_number, is_seller, 
+                SELECT id, email, full_name, phone, is_seller, 
                        seller_status, bio, profile_image, social_handle, created_at
                 FROM users
                 WHERE id = %s
@@ -387,7 +386,348 @@ class ProfileModel:
             
             # Get user profile
             cursor.execute("""
-                SELECT id, email, full_name, phone_number, is_seller, 
+                SELECT id, email, full_name, phone, is_seller, 
+                       seller_status, bio, profile_image, social_handle, created_at
+                FROM users
+                WHERE id = %s
+            """, (user_id,))
+            profile = cursor.fetchone()
+            
+            if not profile:
+                return {'success': False, 'message': 'User not found'}
+            
+            # Get or create statistics
+            cursor.execute("""
+                SELECT purchased_products, total_spent, loyalty_points, 
+                       available_coupons, wishlist_count, last_purchase_date
+                FROM user_statistics
+                WHERE user_id = %s
+            """, (user_id,))
+            statistics = cursor.fetchone()
+            
+            if not statistics:
+                cursor.execute("""
+                    INSERT INTO user_statistics (user_id) VALUES (%s)
+                """, (user_id,))
+                connection.commit()
+                statistics = {
+                    'purchased_products': 0,
+                    'total_spent': 0.00,
+                    'loyalty_points': 0,
+                    'available_coupons': 0,
+                    'wishlist_count': 0,
+                    'last_purchase_date': None
+                }
+            
+            # Get recent transactions
+            cursor.execute("""
+                SELECT 
+                    o.id as order_id,
+                    o.order_number,
+                    o.created_at as purchased_date,
+                    o.total_amount,
+                    o.order_status as status
+                FROM orders o
+                WHERE o.user_id = %s
+                ORDER BY o.created_at DESC
+                LIMIT 5
+            """, (user_id,))
+            transactions = cursor.fetchall() or []
+            
+            # Get available coupons
+            cursor.execute("""
+                SELECT 
+                    uc.id,
+                    c.code,
+                    c.description,
+                    c.discount_type,
+                    c.discount_value,
+                    c.min_purchase_amount,
+                    c.valid_until,
+                    uc.is_used
+                FROM user_coupons uc
+                JOIN coupons c ON uc.coupon_id = c.id
+                WHERE uc.user_id = %s 
+                AND uc.is_used = FALSE
+                AND c.valid_until > NOW()
+                AND c.is_active = TRUE
+                ORDER BY c.valid_until ASC
+            """, (user_id,))
+            coupons = cursor.fetchall() or []
+            
+            # Get seller profile if applicable
+            seller_profile = None
+            if profile.get('is_seller'):
+                cursor.execute("""
+                    SELECT id, user_id, store_name, store_description, store_logo, 
+                           store_banner, business_type, total_sales, total_orders, 
+                           rating, total_reviews, commission_rate, payout_schedule, created_at
+                    FROM seller_profiles
+                    WHERE user_id = %s
+                """, (user_id,))
+                seller_profile = cursor.fetchone()
+            
+            return {
+                'success': True,
+                'data': {
+                    'profile': profile,
+                    'statistics': statistics,
+                    'recent_transactions': transactions,
+                    'available_coupons': coupons,
+                    'seller_profile': seller_profile
+                }
+            }
+        except Error as e:
+            print(f"Error getting dashboard: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    # Keep all other methods (seller applications, etc.) the same...
+    def __init__(self):
+        self.db_config = {
+            'host': os.getenv('MYSQL_HOST', 'localhost'),
+            'user': os.getenv('MYSQL_USER', 'root'),
+            'password': os.getenv('MYSQL_PASSWORD', ''),
+            'database': os.getenv('MYSQL_DATABASE', 'railway'),
+            'port': int(os.getenv('MYSQL_PORT', 3306))
+        }
+    
+    def get_connection(self):
+        """Get database connection"""
+        try:
+            connection = mysql.connector.connect(**self.db_config)
+            return connection
+        except Error as e:
+            print(f"Database connection error: {e}")
+            return None
+    
+    # ==================== PROFILE METHODS ====================
+    
+    def get_user_profile(self, user_id: int) -> Dict[str, Any]:
+        """Get user profile"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT id, email, full_name, phone, is_seller, 
+                       seller_status, bio, profile_image, social_handle, created_at
+                FROM users
+                WHERE id = %s
+            """, (user_id,))
+            
+            user = cursor.fetchone()
+            if not user:
+                return {'success': False, 'message': 'User not found'}
+            
+            return {'success': True, 'data': user}
+        except Error as e:
+            print(f"Error getting profile: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def update_user_profile(self, user_id: int, profile_data: dict) -> Dict[str, Any]:
+        """Update user profile"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Build dynamic update query
+            update_fields = []
+            params = []
+            
+            if 'bio' in profile_data and profile_data['bio'] is not None:
+                update_fields.append("bio = %s")
+                params.append(profile_data['bio'])
+            
+            if 'profile_image' in profile_data and profile_data['profile_image'] is not None:
+                update_fields.append("profile_image = %s")
+                params.append(profile_data['profile_image'])
+            
+            if 'social_handle' in profile_data and profile_data['social_handle'] is not None:
+                update_fields.append("social_handle = %s")
+                params.append(profile_data['social_handle'])
+            
+            if not update_fields:
+                return {'success': False, 'message': 'No fields to update'}
+            
+            params.append(user_id)
+            
+            query = f"""
+                UPDATE users 
+                SET {', '.join(update_fields)}
+                WHERE id = %s
+            """
+            
+            cursor.execute(query, params)
+            connection.commit()
+            
+            # Fetch updated profile
+            cursor.execute("""
+                SELECT id, email, full_name, phone, is_seller, 
+                       seller_status, bio, profile_image, social_handle, created_at
+                FROM users
+                WHERE id = %s
+            """, (user_id,))
+            
+            updated_profile = cursor.fetchone()
+            return {'success': True, 'data': updated_profile}
+        except Error as e:
+            print(f"Error updating profile: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def get_user_statistics(self, user_id: int) -> Dict[str, Any]:
+        """Get or create user statistics"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT purchased_products, total_spent, loyalty_points, 
+                       available_coupons, wishlist_count, last_purchase_date
+                FROM user_statistics
+                WHERE user_id = %s
+            """, (user_id,))
+            
+            stats = cursor.fetchone()
+            
+            if not stats:
+                # Create default statistics
+                cursor.execute("""
+                    INSERT INTO user_statistics (user_id) VALUES (%s)
+                """, (user_id,))
+                connection.commit()
+                stats = {
+                    'purchased_products': 0,
+                    'total_spent': 0.00,
+                    'loyalty_points': 0,
+                    'available_coupons': 0,
+                    'wishlist_count': 0,
+                    'last_purchase_date': None
+                }
+            
+            return {'success': True, 'data': stats}
+        except Error as e:
+            print(f"Error getting statistics: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def get_recent_transactions(self, user_id: int, limit: int = 10) -> Dict[str, Any]:
+        """Get recent transactions"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            
+            cursor.execute("""
+                SELECT 
+                    o.id as order_id,
+                    o.order_number,
+                    o.created_at as purchased_date,
+                    o.total_amount,
+                    o.order_status as status
+                FROM orders o
+                WHERE o.user_id = %s
+                ORDER BY o.created_at DESC
+                LIMIT %s
+            """, (user_id, limit))
+            
+            transactions = cursor.fetchall() or []
+            
+            cursor.execute("""
+                SELECT COUNT(*) as total
+                FROM orders
+                WHERE user_id = %s
+            """, (user_id,))
+            
+            total = cursor.fetchone()['total']
+            
+            return {
+                'success': True,
+                'data': {
+                    'transactions': transactions,
+                    'total_count': total
+                }
+            }
+        except Error as e:
+            print(f"Error getting transactions: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def get_user_coupons(self, user_id: int) -> Dict[str, Any]:
+        """Get user's available coupons"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT 
+                    uc.id,
+                    c.code,
+                    c.description,
+                    c.discount_type,
+                    c.discount_value,
+                    c.min_purchase_amount,
+                    c.valid_until,
+                    uc.is_used
+                FROM user_coupons uc
+                JOIN coupons c ON uc.coupon_id = c.id
+                WHERE uc.user_id = %s 
+                AND uc.is_used = FALSE
+                AND c.valid_until > NOW()
+                AND c.is_active = TRUE
+                ORDER BY c.valid_until ASC
+            """, (user_id,))
+            
+            coupons = cursor.fetchall() or []
+            return {'success': True, 'data': coupons}
+        except Error as e:
+            print(f"Error getting coupons: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def get_profile_dashboard(self, user_id: int) -> Dict[str, Any]:
+        """Get complete profile dashboard"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get user profile
+            cursor.execute("""
+                SELECT id, email, full_name, phone, is_seller, 
                        seller_status, bio, profile_image, social_handle, created_at
                 FROM users
                 WHERE id = %s
