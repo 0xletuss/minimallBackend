@@ -584,7 +584,7 @@ class ProfileModel:
     # ==================== SELLER PROFILE METHODS ====================
     
     def get_seller_profile(self, user_id: int) -> Dict[str, Any]:
-        """Get seller profile"""
+        """Get seller profile - auto-create if missing but user is approved seller"""
         connection = self.get_connection()
         if not connection:
             return {'success': False, 'message': 'Database connection failed'}
@@ -602,6 +602,7 @@ class ProfileModel:
             if not user['is_seller']:
                 return {'success': False, 'message': 'You are not a seller'}
             
+            # Try to get seller profile
             cursor.execute("""
                 SELECT id, user_id, store_name, store_description, store_logo, 
                        store_banner, business_type, total_sales, total_orders, 
@@ -611,6 +612,49 @@ class ProfileModel:
             """, (user_id,))
             
             profile = cursor.fetchone()
+            
+            # If profile doesn't exist but user is marked as seller, try to create from approved application
+            if not profile:
+                cursor.execute("""
+                    SELECT store_name, business_type, business_description
+                    FROM seller_applications
+                    WHERE user_id = %s AND status = 'approved'
+                    ORDER BY applied_at DESC
+                    LIMIT 1
+                """, (user_id,))
+                
+                app_data = cursor.fetchone()
+                
+                if app_data:
+                    # Create seller profile from approved application
+                    cursor.execute("""
+                        INSERT INTO seller_profiles 
+                        (user_id, store_name, business_type, store_description, 
+                         total_sales, total_orders, rating, total_reviews, 
+                         commission_rate, payout_schedule)
+                        VALUES (%s, %s, %s, %s, 0.00, 0, 0.0, 0, 10.00, 'weekly')
+                    """, (
+                        user_id,
+                        app_data['store_name'],
+                        app_data['business_type'],
+                        app_data.get('business_description', '')
+                    ))
+                    
+                    connection.commit()
+                    
+                    # Fetch the newly created profile
+                    cursor.execute("""
+                        SELECT id, user_id, store_name, store_description, store_logo, 
+                               store_banner, business_type, total_sales, total_orders, 
+                               rating, total_reviews, commission_rate, payout_schedule, created_at
+                        FROM seller_profiles
+                        WHERE user_id = %s
+                    """, (user_id,))
+                    
+                    profile = cursor.fetchone()
+                else:
+                    return {'success': False, 'message': 'Seller profile not found'}
+            
             if not profile:
                 return {'success': False, 'message': 'Seller profile not found'}
             
@@ -678,6 +722,183 @@ class ProfileModel:
             return {'success': True, 'data': updated_profile}
         except Error as e:
             print(f"Error updating seller profile: {e}")
+            return {'success': False, 'message': str(e)}
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def create_seller_profile_from_application(self, user_id: int) -> Dict[str, Any]:
+        """Create seller profile from approved application (manual trigger)"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Check if seller profile already exists
+            cursor.execute("""
+                SELECT id FROM seller_profiles WHERE user_id = %s
+            """, (user_id,))
+            
+            existing_profile = cursor.fetchone()
+            if existing_profile:
+                # Profile exists, just fetch and return it
+                cursor.execute("""
+                    SELECT id, user_id, store_name, store_description, store_logo, 
+                           store_banner, business_type, total_sales, total_orders, 
+                           rating, total_reviews, commission_rate, payout_schedule, created_at
+                    FROM seller_profiles
+                    WHERE user_id = %s
+                """, (user_id,))
+                
+                profile = cursor.fetchone()
+                return {
+                    'success': True,
+                    'data': profile,
+                    'message': 'Seller profile already exists'
+                }
+            
+            # Check if user has approved application
+            cursor.execute("""
+                SELECT store_name, business_type, business_description
+                FROM seller_applications
+                WHERE user_id = %s AND status = 'approved'
+                ORDER BY applied_at DESC
+                LIMIT 1
+            """, (user_id,))
+            
+            app_data = cursor.fetchone()
+            
+            if not app_data:
+                return {
+                    'success': False, 
+                    'message': 'No approved seller application found'
+                }
+            
+            # Update user to be a seller
+            cursor.execute("""
+                UPDATE users 
+                SET is_seller = TRUE
+                WHERE id = %s
+            """, (user_id,))
+            
+            # Create seller profile
+            cursor.execute("""
+                INSERT INTO seller_profiles 
+                (user_id, store_name, business_type, store_description, 
+                 total_sales, total_orders, rating, total_reviews, 
+                 commission_rate, payout_schedule)
+                VALUES (%s, %s, %s, %s, 0.00, 0, 0.0, 0, 10.00, 'weekly')
+            """, (
+                user_id,
+                app_data['store_name'],
+                app_data['business_type'],
+                app_data.get('business_description', '')
+            ))
+            
+            connection.commit()
+            
+            # Fetch the created profile
+            cursor.execute("""
+                SELECT id, user_id, store_name, store_description, store_logo, 
+                       store_banner, business_type, total_sales, total_orders, 
+                       rating, total_reviews, commission_rate, payout_schedule, created_at
+                FROM seller_profiles
+                WHERE user_id = %s
+            """, (user_id,))
+            
+            profile = cursor.fetchone()
+            
+            return {
+                'success': True,
+                'data': profile,
+                'message': 'Seller profile created successfully'
+            }
+            
+        except Error as e:
+            if connection:
+                connection.rollback()
+            print(f"Error creating seller profile: {e}")
+            return {
+                'success': False, 
+                'message': f'Error creating seller profile: {str(e)}'
+            }
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
+    
+    def approve_seller_application(self, application_id: int, user_id: int) -> Dict[str, Any]:
+        """Approve seller application and create profile (for admin use)"""
+        connection = self.get_connection()
+        if not connection:
+            return {'success': False, 'message': 'Database connection failed'}
+        
+        try:
+            cursor = connection.cursor(dictionary=True)
+            
+            # Get application data
+            cursor.execute("""
+                SELECT user_id, store_name, business_type, business_description, status
+                FROM seller_applications
+                WHERE id = %s
+            """, (application_id,))
+            
+            application = cursor.fetchone()
+            
+            if not application:
+                return {'success': False, 'message': 'Application not found'}
+            
+            if application['status'] == 'approved':
+                return {'success': False, 'message': 'Application already approved'}
+            
+            app_user_id = application['user_id']
+            
+            # Update application status
+            cursor.execute("""
+                UPDATE seller_applications 
+                SET status = 'approved', reviewed_at = NOW()
+                WHERE id = %s
+            """, (application_id,))
+            
+            # Update user to be a seller
+            cursor.execute("""
+                UPDATE users 
+                SET is_seller = TRUE, seller_status = 'active'
+                WHERE id = %s
+            """, (app_user_id,))
+            
+            # Create seller profile
+            cursor.execute("""
+                INSERT INTO seller_profiles 
+                (user_id, store_name, business_type, store_description, 
+                 total_sales, total_orders, rating, total_reviews, 
+                 commission_rate, payout_schedule)
+                VALUES (%s, %s, %s, %s, 0.00, 0, 0.0, 0, 10.00, 'weekly')
+                ON DUPLICATE KEY UPDATE
+                    store_name = VALUES(store_name),
+                    business_type = VALUES(business_type),
+                    store_description = VALUES(store_description)
+            """, (
+                app_user_id,
+                application['store_name'],
+                application['business_type'],
+                application.get('business_description', '')
+            ))
+            
+            connection.commit()
+            
+            return {
+                'success': True,
+                'message': 'Seller application approved and profile created'
+            }
+            
+        except Error as e:
+            if connection:
+                connection.rollback()
+            print(f"Error approving application: {e}")
             return {'success': False, 'message': str(e)}
         finally:
             if connection.is_connected():

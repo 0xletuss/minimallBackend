@@ -225,7 +225,7 @@ async def get_seller_application_status(user_id: int = Depends(get_current_user_
 
 @router.get("/seller/profile", response_model=SellerProfileResponse)
 async def get_seller_profile(user_id: int = Depends(get_current_user_id)):
-    """Get seller profile (only for sellers)"""
+    """Get seller profile (only for sellers) - auto-creates if missing"""
     try:
         result = profile_model.get_seller_profile(user_id)
         
@@ -237,6 +237,31 @@ async def get_seller_profile(user_id: int = Depends(get_current_user_id)):
             )
             raise HTTPException(
                 status_code=status_code,
+                detail=result['message']
+            )
+        
+        return result['data']
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Server error: {str(e)}"
+        )
+
+@router.post("/seller/profile/create", response_model=SellerProfileResponse, status_code=status.HTTP_201_CREATED)
+async def create_seller_profile(user_id: int = Depends(get_current_user_id)):
+    """
+    Create seller profile from approved application
+    Emergency endpoint for users whose profile wasn't created automatically
+    """
+    try:
+        result = profile_model.create_seller_profile_from_application(user_id)
+        
+        if not result['success']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
                 detail=result['message']
             )
         
