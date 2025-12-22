@@ -7,7 +7,8 @@ from routes.cart_routes import router as cart_router
 from routes.checkout_routes import router as checkout_router
 from routes.profile_routes import router as profile_router
 from routes.seller_product_routes import router as seller_product_router
-from routes.image_routes import router as image_router  # NEW
+from routes.image_routes import router as image_router
+from routes.order_routes import router as order_router  # NEW
 
 from dotenv import load_dotenv 
 import os
@@ -16,7 +17,7 @@ load_dotenv()
 
 app = FastAPI(
     title="Railway E-commerce API",
-    description="FastAPI backend for e-commerce platform",
+    description="FastAPI backend for e-commerce platform with multi-vendor support",
     version="1.0.0"
 )
 
@@ -39,16 +40,27 @@ app.include_router(checkout_router, prefix="/api/checkout", tags=["Checkout"])
 app.include_router(checkout_router, prefix="/api", tags=["Orders"])
 app.include_router(profile_router, prefix="/api", tags=["Profile"])
 app.include_router(seller_product_router, prefix="/api", tags=["Seller Products"])
-app.include_router(image_router, prefix="/api", tags=["Image Upload"])  # NEW
+app.include_router(image_router, prefix="/api", tags=["Image Upload"])
+app.include_router(order_router, prefix="/api", tags=["Order Management"])  # NEW
 
 
 @app.get("/")
 async def root():
-    return {"message": "Railway E-commerce API", "status": "running"}
+    return {
+        "message": "Railway E-commerce API", 
+        "status": "running",
+        "version": "1.0.0",
+        "features": [
+            "Multi-vendor marketplace",
+            "Order management",
+            "Seller dashboard",
+            "Customer orders"
+        ]
+    }
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "timestamp": "2025-12-22"}
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -65,4 +77,4 @@ async def global_exception_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=True)  # Set reload=True for development
