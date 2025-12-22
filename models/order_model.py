@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 load_dotenv()
 
 class OrderModel:
+    
     def __init__(self):
         self.db_config = {
             'host': os.getenv('DB_HOST', 'localhost'),
@@ -33,6 +34,31 @@ class OrderModel:
         return data
     
     # ==================== USER & SELLER VERIFICATION ====================
+    
+    def get_user_seller_info(self, user_id: int) -> Optional[Dict]:
+        """Get user seller information from seller_profiles table"""
+        conn = self.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        try:
+            cursor.execute("""
+                SELECT 
+                    u.id,
+                    u.email,
+                    u.is_seller,
+                    u.role,
+                    sp.seller_status,
+                    sp.store_name,
+                    sp.commission_rate
+                FROM users u
+                LEFT JOIN seller_profiles sp ON u.id = sp.user_id
+                WHERE u.id = %s
+            """, (user_id,))
+            
+            return cursor.fetchone()
+        finally:
+            cursor.close()
+            conn.close()
     
     def get_user_seller_status(self, user_id: int) -> Optional[Dict]:
         """Check if user is an active seller"""
@@ -211,6 +237,7 @@ class OrderModel:
                 SELECT DISTINCT
                     o.*,
                     u.email as customer_email,
+                    sp.store_name,
                     COALESCE(sp.commission_rate, 10.00) as commission_rate
                 FROM orders o
                 JOIN users u ON o.user_id = u.id

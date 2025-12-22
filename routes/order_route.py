@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timedelta
 from models.order_model import OrderModel
-from utils.auth import get_current_user, verify_seller_access
+from routes.auth_routes import get_current_user  # Import from auth_routes
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -14,6 +14,28 @@ class OrderStatusUpdate(BaseModel):
 
 class OrderCancelRequest(BaseModel):
     reason: Optional[str] = "Cancelled by seller"
+
+
+# Helper function to verify seller access
+def verify_seller_access(current_user: dict) -> bool:
+    """
+    Verify if user has seller access
+    Returns True if user is an active seller, False otherwise
+    """
+    if not current_user:
+        return False
+    
+    # Check if user is marked as seller
+    is_seller = current_user.get("is_seller", False)
+    
+    # Check seller status (should be 'active' or 'approved')
+    seller_status = current_user.get("seller_status", "")
+    
+    # Admin role should also have seller access
+    role = current_user.get("role", "")
+    
+    return (is_seller and seller_status in ["active", "approved"]) or role == "admin"
+
 
 # ==================== SELLER ORDER ROUTES ====================
 

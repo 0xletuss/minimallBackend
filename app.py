@@ -8,7 +8,7 @@ from routes.checkout_routes import router as checkout_router
 from routes.profile_routes import router as profile_router
 from routes.seller_product_routes import router as seller_product_router
 from routes.image_routes import router as image_router
-from routes.order_routes import router as order_router  # NEW
+from routes.order_route import router as order_router  # NEW
 
 from dotenv import load_dotenv 
 import os
