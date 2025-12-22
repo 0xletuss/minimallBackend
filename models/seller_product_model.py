@@ -339,13 +339,13 @@ class SellerProductModel:
             
             product_id = cursor.lastrowid
             
-            # Add product image if provided
+            # Add product image if provided (Cloudinary URL)
             if product_data.get('image_url'):
                 cursor.execute("""
                     INSERT INTO product_images (
                         product_id, image_url, alt_text, is_primary, display_order
                     ) VALUES (%s, %s, %s, TRUE, 1)
-                """, (product_id, product_data['image_url'], product_data['name']))
+                """, (product_id, product_data['image_url'], product_data.get('name', 'Product Image')))
             
             connection.commit()
             

@@ -5,8 +5,9 @@ from routes.auth_routes import router as auth_router
 from routes.product_routes import router as product_router
 from routes.cart_routes import router as cart_router
 from routes.checkout_routes import router as checkout_router
-from routes.profile_routes import router as profile_router  # Add this
+from routes.profile_routes import router as profile_router
 from routes.seller_product_routes import router as seller_product_router
+from routes.image_routes import router as image_router  # NEW
 
 from dotenv import load_dotenv 
 import os
@@ -36,8 +37,9 @@ app.include_router(product_router, prefix="/api", tags=["Products"])
 app.include_router(cart_router, prefix="/api/cart", tags=["Cart"])
 app.include_router(checkout_router, prefix="/api/checkout", tags=["Checkout"])
 app.include_router(checkout_router, prefix="/api", tags=["Orders"])
-app.include_router(profile_router, prefix="/api", tags=["Profile"])  # Add this
+app.include_router(profile_router, prefix="/api", tags=["Profile"])
 app.include_router(seller_product_router, prefix="/api", tags=["Seller Products"])
+app.include_router(image_router, prefix="/api", tags=["Image Upload"])  # NEW
 
 
 @app.get("/")
