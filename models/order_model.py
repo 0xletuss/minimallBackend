@@ -11,11 +11,11 @@ class OrderModel:
     
     def __init__(self):
         self.db_config = {
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'user': os.getenv('DB_USER', 'root'),
-            'password': os.getenv('DB_PASSWORD', ''),
-            'database': os.getenv('DB_NAME', 'railway'),
-            'port': int(os.getenv('DB_PORT', 3306))
+           'host': os.getenv('MYSQL_HOST', 'localhost'),
+            'user': os.getenv('MYSQL_USER', 'root'),
+            'password': os.getenv('MYSQL_PASSWORD', ''),
+            'database': os.getenv('MYSQL_DATABASE', 'railway'),
+            'port': int(os.getenv('MYSQL_PORT', 3306))
         }
     
     def get_connection(self):
