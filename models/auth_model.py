@@ -99,7 +99,7 @@ class AuthModel:
                 connection.close()
     
     def verify_user(self, email: str, password: str) -> Dict[str, Any]:
-        """Verify user credentials"""
+        """Verify user credentials and return user data with seller info"""
         connection = self.get_connection()
         if not connection:
             return {'success': False, 'message': 'Database connection failed'}
@@ -107,9 +107,24 @@ class AuthModel:
         try:
             cursor = connection.cursor(dictionary=True)
             
+            # Get user with seller info using your actual columns
             query = """
-                SELECT id, email, password_hash, full_name, phone, role, is_active 
-                FROM users WHERE email = %s
+                SELECT 
+                    u.id,
+                    u.email,
+                    u.password_hash,
+                    u.full_name,
+                    u.phone,
+                    u.role,
+                    u.is_active,
+                    u.is_seller,
+                    u.created_at,
+                    sp.seller_status,
+                    sp.store_name,
+                    sp.commission_rate
+                FROM users u
+                LEFT JOIN seller_profiles sp ON u.id = sp.user_id
+                WHERE u.email = %s
             """
             cursor.execute(query, (email,))
             user = cursor.fetchone()
@@ -130,6 +145,14 @@ class AuthModel:
                 # Remove password_hash from return data
                 user.pop('password_hash', None)
                 
+                # Convert datetime to string
+                if user.get('created_at'):
+                    user['created_at'] = user['created_at'].isoformat()
+                
+                # Set default seller_status if None
+                if user.get('is_seller') and not user.get('seller_status'):
+                    user['seller_status'] = 'active'
+                
                 return {
                     'success': True,
                     'message': 'Login successful',
@@ -146,130 +169,64 @@ class AuthModel:
                 cursor.close()
                 connection.close()
     
-    # Update your get_user_by_id() method in auth_model.py
-# to work with your existing seller_profiles structure
-
-def get_user_by_id(self, user_id: int):
-    """Get user by ID with all details including seller info"""
-    conn = self.get_connection()
-    cursor = conn.cursor(dictionary=True)
-    
-    try:
-        # Get user with seller profile info using your actual column names
-        cursor.execute("""
-            SELECT 
-                u.id,
-                u.email,
-                u.full_name,
-                u.phone,
-                u.role,
-                u.is_active,
-                u.is_seller,
-                u.created_at,
-                sp.seller_status,
-                sp.store_name,
-                sp.store_description,
-                sp.commission_rate,
-                sp.total_sales,
-                sp.rating
-            FROM users u
-            LEFT JOIN seller_profiles sp ON u.id = sp.user_id
-            WHERE u.id = %s
-        """, (user_id,))
+    def get_user_by_id(self, user_id: int):
+        """Get user by ID with all details including seller info"""
+        connection = self.get_connection()
+        if not connection:
+            return None
         
-        user = cursor.fetchone()
-        
-        if user:
-            # Remove sensitive data
-            if 'password' in user:
-                del user['password']
+        try:
+            cursor = connection.cursor(dictionary=True)
             
-            # Convert datetime to string for JSON serialization
-            if user.get('created_at'):
-                user['created_at'] = user['created_at'].isoformat()
+            # Get user with seller profile info using your actual column names
+            cursor.execute("""
+                SELECT 
+                    u.id,
+                    u.email,
+                    u.full_name,
+                    u.phone,
+                    u.role,
+                    u.is_active,
+                    u.is_seller,
+                    u.created_at,
+                    sp.seller_status,
+                    sp.store_name,
+                    sp.store_description,
+                    sp.commission_rate,
+                    sp.total_sales,
+                    sp.rating
+                FROM users u
+                LEFT JOIN seller_profiles sp ON u.id = sp.user_id
+                WHERE u.id = %s
+            """, (user_id,))
             
-            # Set default seller_status if None
-            if user.get('is_seller') and not user.get('seller_status'):
-                user['seller_status'] = 'active'
-        
-        return user
-        
-    finally:
-        cursor.close()
-        conn.close()
-
-
-# Update verify_user() method to include seller info
-def verify_user(self, email: str, password: str):
-    """Verify user credentials and return user data with seller info"""
-    conn = self.get_connection()
-    cursor = conn.cursor(dictionary=True)
+            user = cursor.fetchone()
+            
+            if user:
+                # Remove sensitive data
+                if 'password' in user:
+                    del user['password']
+                if 'password_hash' in user:
+                    del user['password_hash']
+                
+                # Convert datetime to string for JSON serialization
+                if user.get('created_at'):
+                    user['created_at'] = user['created_at'].isoformat()
+                
+                # Set default seller_status if None
+                if user.get('is_seller') and not user.get('seller_status'):
+                    user['seller_status'] = 'active'
+            
+            return user
+            
+        except Error as e:
+            print(f"Error getting user by ID: {e}")
+            return None
+        finally:
+            if connection.is_connected():
+                cursor.close()
+                connection.close()
     
-    try:
-        # Get user with seller info using your actual columns
-        cursor.execute("""
-            SELECT 
-                u.id,
-                u.email,
-                u.password,
-                u.full_name,
-                u.phone,
-                u.role,
-                u.is_active,
-                u.is_seller,
-                u.created_at,
-                sp.seller_status,
-                sp.store_name,
-                sp.commission_rate
-            FROM users u
-            LEFT JOIN seller_profiles sp ON u.id = sp.user_id
-            WHERE u.email = %s
-        """, (email,))
-        
-        user = cursor.fetchone()
-        
-        if not user:
-            return {
-                'success': False,
-                'message': 'Invalid email or password'
-            }
-        
-        # Check if account is active
-        if not user['is_active']:
-            return {
-                'success': False,
-                'message': 'Account is not active'
-            }
-        
-        # Verify password
-        import bcrypt
-        if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
-            return {
-                'success': False,
-                'message': 'Invalid email or password'
-            }
-        
-        # Remove password from response
-        del user['password']
-        
-        # Convert datetime to string
-        if user.get('created_at'):
-            user['created_at'] = user['created_at'].isoformat()
-        
-        # Set default seller_status if None
-        if user.get('is_seller') and not user.get('seller_status'):
-            user['seller_status'] = 'active'
-        
-        return {
-            'success': True,
-            'message': 'Login successful',
-            'user': user
-        }
-        
-    finally:
-        cursor.close()
-        conn.close()
-        
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user by email"""
         connection = self.get_connection()
