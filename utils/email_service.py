@@ -216,7 +216,7 @@ class BrevoEmailService:
                         <table width="100%" cellpadding="0" cellspacing="0">
                             <tr>
                                 <td style="text-align: center;">
-                                    <a href="https://yourstore.com" 
+                                    <a href="https://minimal-mall.onrender.com" 
                                        style="display: inline-block; background-color: #667eea; color: white; 
                                               padding: 14px 35px; text-decoration: none; border-radius: 5px; 
                                               font-size: 14px; font-weight: bold;">
