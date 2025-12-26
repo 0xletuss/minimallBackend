@@ -9,6 +9,7 @@ from routes.profile_routes import router as profile_router
 from routes.seller_product_routes import router as seller_product_router
 from routes.image_routes import router as image_router
 from routes.order_route import router as order_router  # NEW
+from utils.email_service import brevo_service
 
 from dotenv import load_dotenv 
 import os
@@ -73,6 +74,11 @@ async def global_exception_handler(request: Request, exc: Exception):
             "Access-Control-Allow-Headers": "*",
         }
     )
+
+@app.on_event("startup")
+async def startup_event():
+    print("✅ Email service ready")
+    
 
 if __name__ == "__main__":
     import uvicorn

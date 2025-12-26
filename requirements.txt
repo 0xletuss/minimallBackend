@@ -11,3 +11,4 @@ cloudinary==1.36.0
 # Use pydantic version that ships prebuilt binaries (wheels)
 pydantic>=2.7
 pydantic-settings==2.1.0
+sib-api-v3-sdk==7.6.0
