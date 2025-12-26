@@ -74,10 +74,10 @@ class AuthModel:
             # Hash password
             password_hash = self.hash_password(password)
             
-            # Insert user
+            # Insert user with email_verified set to TRUE (since OTP is verified)
             query = """
-                INSERT INTO users (email, password_hash, full_name, phone, role) 
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO users (email, password_hash, full_name, phone, role, email_verified) 
+                VALUES (%s, %s, %s, %s, %s, TRUE)
             """
             cursor.execute(query, (email, password_hash, full_name, phone, role))
             connection.commit()
@@ -118,6 +118,7 @@ class AuthModel:
                     u.role,
                     u.is_active,
                     u.is_seller,
+                    u.email_verified,
                     u.created_at,
                     sp.seller_status,
                     sp.store_name,
@@ -188,6 +189,7 @@ class AuthModel:
                     u.role,
                     u.is_active,
                     u.is_seller,
+                    u.email_verified,
                     u.created_at,
                     sp.seller_status,
                     sp.store_name,
@@ -242,6 +244,14 @@ class AuthModel:
             """
             cursor.execute(query, (email,))
             user = cursor.fetchone()
+            
+            # Convert datetime objects to strings for JSON serialization
+            if user:
+                if user.get('created_at'):
+                    user['created_at'] = user['created_at'].isoformat()
+                if user.get('last_login'):
+                    user['last_login'] = user['last_login'].isoformat()
+            
             return user
             
         except Error as e:
