@@ -17,7 +17,7 @@ router = APIRouter()
 profile_model = ProfileModel()
 security = HTTPBearer()
 
-# JWT Configuration (same as auth_routes)
+# JWT Configuration
 JWT_SECRET = os.getenv('JWT_SECRET_KEY', 'your-jwt-secret-key-change-in-production')
 JWT_ALGORITHM = 'HS256'
 
@@ -74,6 +74,7 @@ async def update_profile(
 ):
     """Update user profile"""
     try:
+        # Use exclude_none instead of exclude_unset to allow explicit null values
         result = profile_model.update_user_profile(
             user_id, 
             profile_data.dict(exclude_unset=True)
@@ -164,6 +165,28 @@ async def get_recent_transactions(
             detail=f"Server error: {str(e)}"
         )
 
+@router.get("/coupons", response_model=List[UserCouponResponse])
+async def get_user_coupons(user_id: int = Depends(get_current_user_id)):
+    """Get user's available coupons"""
+    try:
+        result = profile_model.get_user_coupons(user_id)
+        
+        if not result['success']:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result['message']
+            )
+        
+        return result['data']
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Server error: {str(e)}"
+        )
+
 # ==================== SELLER APPLICATION ENDPOINTS ====================
 
 @router.post("/seller/apply", response_model=SellerApplicationResponse, status_code=status.HTTP_201_CREATED)
@@ -171,7 +194,7 @@ async def apply_to_become_seller(
     application: SellerApplicationCreate,
     user_id: int = Depends(get_current_user_id)
 ):
-    """Submit application to become a seller (Start Selling button)"""
+    """Submit application to become a seller"""
     try:
         application_data = {
             'store_name': application.store_name,
@@ -225,7 +248,7 @@ async def get_seller_application_status(user_id: int = Depends(get_current_user_
 
 @router.get("/seller/profile", response_model=SellerProfileResponse)
 async def get_seller_profile(user_id: int = Depends(get_current_user_id)):
-    """Get seller profile (only for sellers) - auto-creates if missing"""
+    """Get seller profile - auto-creates if missing"""
     try:
         result = profile_model.get_seller_profile(user_id)
         
@@ -298,28 +321,6 @@ async def update_seller_profile(
             )
             raise HTTPException(
                 status_code=status_code,
-                detail=result['message']
-            )
-        
-        return result['data']
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server error: {str(e)}"
-        )
-
-@router.get("/seller/coupons", response_model=List[UserCouponResponse])
-async def get_user_coupons(user_id: int = Depends(get_current_user_id)):
-    """Get user's available coupons"""
-    try:
-        result = profile_model.get_user_coupons(user_id)
-        
-        if not result['success']:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=result['message']
             )
         

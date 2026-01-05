@@ -185,6 +185,7 @@ class ProfileModel:
                 return {'success': False, 'message': 'User not found'}
             
             return {'success': True, 'data': user}
+            
         except Error as e:
             print(f"Error getting profile: {e}")
             return {'success': False, 'message': str(e)}
@@ -194,7 +195,7 @@ class ProfileModel:
                 connection.close()
     
     def update_user_profile(self, user_id: int, profile_data: dict) -> Dict[str, Any]:
-        """Update user profile"""
+        """Update user profile - allows setting fields to null"""
         connection = self.get_connection()
         if not connection:
             return {'success': False, 'message': 'Database connection failed'}
@@ -206,15 +207,17 @@ class ProfileModel:
             update_fields = []
             params = []
             
-            if 'bio' in profile_data and profile_data['bio'] is not None:
+            # Only update fields that are present in profile_data
+            # Allow None values to clear fields
+            if 'bio' in profile_data:
                 update_fields.append("bio = %s")
                 params.append(profile_data['bio'])
             
-            if 'profile_image' in profile_data and profile_data['profile_image'] is not None:
+            if 'profile_image' in profile_data:
                 update_fields.append("profile_image = %s")
                 params.append(profile_data['profile_image'])
             
-            if 'social_handle' in profile_data and profile_data['social_handle'] is not None:
+            if 'social_handle' in profile_data:
                 update_fields.append("social_handle = %s")
                 params.append(profile_data['social_handle'])
             
@@ -232,6 +235,9 @@ class ProfileModel:
             cursor.execute(query, params)
             connection.commit()
             
+            if cursor.rowcount == 0:
+                return {'success': False, 'message': 'User not found or no changes made'}
+            
             # Fetch updated profile
             cursor.execute("""
                 SELECT id, email, full_name, phone, is_seller, 
@@ -241,7 +247,12 @@ class ProfileModel:
             """, (user_id,))
             
             updated_profile = cursor.fetchone()
+            
+            if not updated_profile:
+                return {'success': False, 'message': 'Failed to fetch updated profile'}
+            
             return {'success': True, 'data': updated_profile}
+            
         except Error as e:
             print(f"Error updating profile: {e}")
             return {'success': False, 'message': str(e)}
@@ -283,6 +294,7 @@ class ProfileModel:
                 }
             
             return {'success': True, 'data': stats}
+            
         except Error as e:
             print(f"Error getting statistics: {e}")
             return {'success': False, 'message': str(e)}
@@ -330,6 +342,7 @@ class ProfileModel:
                     'total_count': total
                 }
             }
+            
         except Error as e:
             print(f"Error getting transactions: {e}")
             return {'success': False, 'message': str(e)}
@@ -367,6 +380,7 @@ class ProfileModel:
             
             coupons = cursor.fetchall() or []
             return {'success': True, 'data': coupons}
+            
         except Error as e:
             print(f"Error getting coupons: {e}")
             return {'success': False, 'message': str(e)}
@@ -477,6 +491,7 @@ class ProfileModel:
                     'seller_profile': seller_profile
                 }
             }
+            
         except Error as e:
             print(f"Error getting dashboard: {e}")
             return {'success': False, 'message': str(e)}
@@ -543,6 +558,7 @@ class ProfileModel:
             
             application = cursor.fetchone()
             return {'success': True, 'data': application}
+            
         except Error as e:
             print(f"Error creating application: {e}")
             return {'success': False, 'message': str(e)}
@@ -573,6 +589,7 @@ class ProfileModel:
                 return {'success': False, 'message': 'No application found'}
             
             return {'success': True, 'data': application}
+            
         except Error as e:
             print(f"Error getting application: {e}")
             return {'success': False, 'message': str(e)}
@@ -659,6 +676,7 @@ class ProfileModel:
                 return {'success': False, 'message': 'Seller profile not found'}
             
             return {'success': True, 'data': profile}
+            
         except Error as e:
             print(f"Error getting seller profile: {e}")
             return {'success': False, 'message': str(e)}
@@ -668,7 +686,7 @@ class ProfileModel:
                 connection.close()
     
     def update_seller_profile(self, user_id: int, profile_data: dict) -> Dict[str, Any]:
-        """Update seller profile"""
+        """Update seller profile - allows setting fields to null"""
         connection = self.get_connection()
         if not connection:
             return {'success': False, 'message': 'Database connection failed'}
@@ -690,10 +708,16 @@ class ProfileModel:
             update_fields = []
             params = []
             
-            for field, value in profile_data.items():
-                if value is not None:
+            # Allow all fields to be updated, including setting to null
+            allowed_fields = [
+                'store_name', 'store_description', 'store_logo', 'store_banner',
+                'bank_account_name', 'bank_account_number', 'bank_name', 'payout_schedule'
+            ]
+            
+            for field in allowed_fields:
+                if field in profile_data:
                     update_fields.append(f"{field} = %s")
-                    params.append(value)
+                    params.append(profile_data[field])
             
             if not update_fields:
                 return {'success': False, 'message': 'No fields to update'}
@@ -709,6 +733,9 @@ class ProfileModel:
             cursor.execute(query, params)
             connection.commit()
             
+            if cursor.rowcount == 0:
+                return {'success': False, 'message': 'Seller profile not found or no changes made'}
+            
             # Fetch updated profile
             cursor.execute("""
                 SELECT id, user_id, store_name, store_description, store_logo, 
@@ -719,7 +746,12 @@ class ProfileModel:
             """, (user_id,))
             
             updated_profile = cursor.fetchone()
+            
+            if not updated_profile:
+                return {'success': False, 'message': 'Failed to fetch updated profile'}
+            
             return {'success': True, 'data': updated_profile}
+            
         except Error as e:
             print(f"Error updating seller profile: {e}")
             return {'success': False, 'message': str(e)}
@@ -780,7 +812,7 @@ class ProfileModel:
             # Update user to be a seller
             cursor.execute("""
                 UPDATE users 
-                SET is_seller = TRUE
+                SET is_seller = TRUE, seller_status = 'active'
                 WHERE id = %s
             """, (user_id,))
             
