@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from models.admin_model import AdminModel
-from middleware.auth_middleware import get_current_user
+from routes.auth_routes import get_current_user
 
 router = APIRouter()
 admin_model = AdminModel()
