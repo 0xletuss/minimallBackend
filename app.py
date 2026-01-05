@@ -9,6 +9,7 @@ from routes.profile_routes import router as profile_router
 from routes.seller_product_routes import router as seller_product_router
 from routes.image_routes import router as image_router
 from routes.order_route import router as order_router
+from routes.admin_routes import router as admin_router
 
 from dotenv import load_dotenv 
 import os
@@ -44,6 +45,7 @@ app.include_router(profile_router, prefix="/api", tags=["Profile"])
 app.include_router(seller_product_router, prefix="/api", tags=["Seller Products"])
 app.include_router(image_router, prefix="/api", tags=["Image Upload"])
 app.include_router(order_router, prefix="/api", tags=["Order Management"])
+app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 
 
 @app.get("/")
